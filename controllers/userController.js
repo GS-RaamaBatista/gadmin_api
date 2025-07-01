@@ -15,10 +15,10 @@ function getDataHoraAtual() {
 }
 
 export async function loginHandler(req, res) {
-  const { email, password, ip } = req.query;
+  const { email, password, ip } = req.body;
 
   try {
-    let query = 'SELECT name, client, id, nickname, email FROM gfw_users WHERE (email = ? OR nickname = ?) AND password = ?';
+    let query = 'SELECT name, client, id, nickname, email, password FROM gfw_users WHERE (email = ? OR nickname = ?) AND password = ?';
     let params = [email, email, password];
 
     const [rows] = await pool.query(query, params);
@@ -38,16 +38,27 @@ export async function loginHandler(req, res) {
     ? `Nickname: ${usuario.nickname}`
     : `Email: ${usuario.email}`;
 
-  // pegar ip do front
 
     const [result] = await pool.query(
-      'INSERT INTO gfw_access (idd, date, login, details) VALUES (?, ?, ?, ?)',
-      [usuario.id, dataHora, '1', details ]
+      'INSERT INTO ips_liberados (id_pessoas, data, ip) VALUES (?, ?, ?)',
+      [usuario.id, dataHora, ip ]
   )
+
+    const [noticias] = await pool.query(`
+      SELECT c.titulo, subtitulo, conteudo, t.descricao tipo, p.nome_interno produto
+      FROM gadmin.comunicacao c
+      LEFT JOIN gadmin.comunicacao_tipos t ON c.id_comunicacao_tipos=t.id
+      LEFT JOIN gadmin.produtos p ON c.id_produtos=p.id WHERE ativa = 1 AND c.aprovada=1 and c.data_inicio< NOW()
+      AND c.data_final> NOW()
+      AND (c.id_comunicacao_tipos<>5 AND (c.uf_ba+c.uf_ma+c.uf_mt+c.uf_go+c.uf_pr+c.uf_mg+c.uf_rj=0))
+      ORDER BY c.data_inicio desc limit 5;
+    `);
+
 
     res.status(200).json({
       usuario,
       acessoId: result.insertId,
+      noticias,
       message: 'Acesso registrado com sucesso!'
     });
 
