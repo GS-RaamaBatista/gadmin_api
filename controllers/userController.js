@@ -45,7 +45,7 @@ export async function loginHandler(req, res) {
   )
 
     const [noticias] = await pool.query(`
-      SELECT c.titulo, subtitulo, conteudo, t.descricao tipo, p.nome_interno produto
+      SELECT  c.id,c.titulo, subtitulo, conteudo, t.descricao tipo, p.nome_interno produto
       FROM gadmin.comunicacao c
       LEFT JOIN gadmin.comunicacao_tipos t ON c.id_comunicacao_tipos=t.id
       LEFT JOIN gadmin.produtos p ON c.id_produtos=p.id WHERE ativa = 1 AND c.aprovada=1 and c.data_inicio< NOW()
@@ -54,6 +54,7 @@ export async function loginHandler(req, res) {
       ORDER BY c.data_inicio desc limit 5;
     `);
 
+    // const [os] = 
 
     res.status(200).json({
       usuario,
