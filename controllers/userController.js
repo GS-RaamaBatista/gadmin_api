@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 import crypto from 'crypto';
 dotenv.config();
 
-function getDataHoraAtual() {
+export function getDataHoraAtual() {
   const agora = new Date();
 
   const ano = agora.getFullYear();
@@ -17,6 +17,17 @@ function getDataHoraAtual() {
 
   return `${ano}-${mes}-${dia} ${hora}:${minuto}:${segundo}`;
 }
+
+async function registrarAcesso({ usuarioId, ip, sucesso, detalhe }) {
+  const dataHora = getDataHoraAtual();
+  const coluna = sucesso ? 'login' : 'try';
+  const [result] = await pool.query(
+    `INSERT INTO gfw_access (idd, date, ${coluna}, ip, details) VALUES (?, ?, 1, ?, ?)`,
+    [usuarioId, dataHora, ip, detalhe]
+  );
+  return result.insertId;
+}
+
 
 export async function loginHandler(req, res) {
   const { email, password, ip } = req.body;
@@ -32,17 +43,30 @@ export async function loginHandler(req, res) {
       return res.status(404).json({ error: 'Usuário não encontrado.' });
     }
 
+
     const usuario = rows[0]
+    const loginVia = email === usuario.email ? 'Email' : 'Nickname';
+    const detalhe = `${loginVia}: ${email}`;
 
     const hashDigitado = crypto.createHash('md5').update(password).digest('hex')
 
     if (hashDigitado !== usuario.password) {
+      await registrarAcesso({ usuarioId: usuario.id, ip, sucesso: false, detalhe: detalhe });
       return res.status(401).json({ error: 'Senha incorreta.' })
     }
 
     if (usuario.active === '0') {
+      await registrarAcesso({ usuarioId: usuario.id, ip, sucesso: false, detalhe: detalhe});
       return res.status(403).json({ error: 'Esse usuário encontra-se inativo.' })
     }
+
+    const acessoId = await registrarAcesso({
+      usuarioId: usuario.id,
+      ip,
+      sucesso: true,
+      detalhe: detalhe
+    });
+
     const token = jwt.sign(
       { id: usuario.id, email: usuario.email },
       SECRET_KEY
@@ -50,7 +74,7 @@ export async function loginHandler(req, res) {
 
     const dataHora = getDataHoraAtual();
 
-    const [result] = await pool.query(
+    await pool.query(
       'INSERT INTO ips_liberados (id_pessoas, data, ip) VALUES (?, ?, ?)',
       [usuario.id, dataHora, ip]
     )
@@ -68,7 +92,7 @@ export async function loginHandler(req, res) {
     res.status(200).json({
       token,
       usuario,
-      acessoId: result.insertId,
+      acessoId,
       noticias,
       message: 'Acesso registrado com sucesso!'
     });
