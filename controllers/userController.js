@@ -1,4 +1,8 @@
 import { pool } from '../db/connection.js';
+import jwt from 'jsonwebtoken';
+import dotenv from 'dotenv';
+import crypto from 'crypto';
+dotenv.config();
 
 function getDataHoraAtual() {
   const agora = new Date();
@@ -16,33 +20,40 @@ function getDataHoraAtual() {
 
 export async function loginHandler(req, res) {
   const { email, password, ip } = req.body;
+  const SECRET_KEY = process.env.SECRET_KEY;
 
   try {
-    let query = 'SELECT name, client, id, nickname, email, password FROM gfw_users WHERE (email = ? OR nickname = ?) AND password = ?';
-    let params = [email, email, password];
-
-    const [rows] = await pool.query(query, params);
+    const [rows] = await pool.query(
+      'SELECT name, client, id, nickname, email, active, password FROM gfw_users WHERE email = ? OR nickname = ?',
+      [email, email]
+    );
 
     if (rows.length === 0) {
       return res.status(404).json({ error: 'Usuário não encontrado.' });
     }
 
-    const usuario = rows[0];
+    const usuario = rows[0]
 
-    if (usuario.client == '1') {
-      return res.status(403).json({ error: 'Usuário não tem permissão.' });
+    const hashDigitado = crypto.createHash('md5').update(password).digest('hex')
+
+    if (hashDigitado !== usuario.password) {
+      return res.status(401).json({ error: 'Senha incorreta.' })
     }
 
-    const dataHora = getDataHoraAtual();
-    const details = email === usuario.nickname
-    ? `Nickname: ${usuario.nickname}`
-    : `Email: ${usuario.email}`;
+    if (usuario.active === '0') {
+      return res.status(403).json({ error: 'Esse usuário encontra-se inativo.' })
+    }
+    const token = jwt.sign(
+      { id: usuario.id, email: usuario.email },
+      SECRET_KEY
+    );
 
+    const dataHora = getDataHoraAtual();
 
     const [result] = await pool.query(
       'INSERT INTO ips_liberados (id_pessoas, data, ip) VALUES (?, ?, ?)',
-      [usuario.id, dataHora, ip ]
-  )
+      [usuario.id, dataHora, ip]
+    )
 
     const [noticias] = await pool.query(`
       SELECT  c.id,c.titulo, subtitulo, conteudo, t.descricao tipo, p.nome_interno produto
@@ -55,6 +66,7 @@ export async function loginHandler(req, res) {
     `);
 
     res.status(200).json({
+      token,
       usuario,
       acessoId: result.insertId,
       noticias,
@@ -66,4 +78,3 @@ export async function loginHandler(req, res) {
     res.status(500).json({ error: 'Erro ao buscar usuários.' });
   }
 }
-

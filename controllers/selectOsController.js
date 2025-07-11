@@ -93,10 +93,10 @@ export async function selectOs(req, res) {
           ORDER BY O.fazendo DESC, O.id_os_situacoes ASC, O.id_os_prioridades, O.id;
         `, [setorId])
 
-          return res.status(200).json({ osFazendo: resultado })
+        return res.status(200).json({ osFazendo: resultado })
 
 
-     case 'Feito': 
+      case 'Feito':
         const { dataDe, dataAte } = calculatorDate();
 
         [resultado] = await pool.query(`
@@ -117,10 +117,10 @@ export async function selectOs(req, res) {
           ORDER BY O.id_os_prioridades, O.id
         `, [dataDe, dataAte, setorId]);
 
-          return res.status(200).json({ osFeito: resultado })
+        return res.status(200).json({ osFeito: resultado })
 
-        default:
-          return res.status(400).json({ error: 'Filtro inválido' });
+      default:
+        return res.status(400).json({ error: 'Filtro inválido' });
     }
 
   } catch (error) {
